@@ -1,73 +1,38 @@
-import { Suspense } from "react"
+import { CustomerServiceAvatar } from "@/components/customer-service-avatar"
+import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import { createServerClient } from "@/lib/supabase/server"
-import CustomerServiceAvatar from "@/components/customer-service-avatar"
-import { Skeleton } from "@/components/ui/skeleton"
 
 export default async function Home() {
-  const supabase = await createServerClient()
+  // In production, we would check for authentication
+  // For development, we'll use a mock user ID
+  const supabase = await createClient()
 
-  // Use getUser() instead of getSession() for better security
   const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser()
+    data: { session },
+  } = await supabase.auth.getSession()
 
-  // If user is not logged in, redirect to login page
-  if (!user || error) {
-    // For development, you can comment out the redirect and use a mock user ID
-    const isDevelopment = process.env.NODE_ENV === "development"
-    if (isDevelopment) {
-      // Use a mock user ID for development
-      const mockUserId = "00000000-0000-0000-0000-000000000000"
-      return (
-        <main className="flex min-h-screen flex-col items-center justify-between p-4 md:p-24 bg-gradient-to-b from-blue-50 to-white">
-          <div className="z-10 w-full max-w-5xl items-center justify-between">
-            <div className="flex items-center justify-between mb-8">
-              <h1 className="text-4xl font-bold text-blue-600">Swisscom AI Assistant</h1>
-              <img src="/swisscom-logo.png?height=40&width=120" alt="Swisscom Logo" className="h-10" />
-            </div>
-
-            <Suspense fallback={<AvatarSkeleton />}>
-              <CustomerServiceAvatar userId={mockUserId} />
-            </Suspense>
-          </div>
-        </main>
-      )
-    }
-
+  // In production, redirect to login if not authenticated
+  // For development, we'll allow access without authentication
+  if (!session && process.env.NODE_ENV === "production") {
     redirect("/login")
   }
 
+  const userId = session?.user?.id || "00000000-0000-0000-0000-000000000000"
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-4 md:p-24 bg-gradient-to-b from-blue-50 to-white">
-      <div className="z-10 w-full max-w-5xl items-center justify-between">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-4xl font-bold text-blue-600">Swisscom AI Assistant</h1>
-          <img src="/swisscom-logo.png?height=40&width=120" alt="Swisscom Logo" className="h-10" />
+    <div className="container flex flex-col items-center py-8">
+      <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[90%]">
+        <div className="flex flex-col space-y-2 text-center mb-8">
+          <h1 className="text-3xl font-bold tracking-tight">Swisscom AI Customer Service</h1>
+          <p className="text-muted-foreground">Ask questions about Swisscom products, services, and support</p>
         </div>
 
-        <Suspense fallback={<AvatarSkeleton />}>
-          <CustomerServiceAvatar userId={user.id} />
-        </Suspense>
-      </div>
-    </main>
-  )
-}
+        <CustomerServiceAvatar userId={userId} />
 
-function AvatarSkeleton() {
-  return (
-    <div className="flex flex-col items-center w-full max-w-4xl mx-auto gap-6">
-      <div className="w-full flex justify-end">
-        <Skeleton className="h-10 w-24" />
-      </div>
-
-      <Skeleton className="w-full h-[400px] rounded-lg" />
-
-      <div className="w-full">
-        <Skeleton className="h-[500px] w-full rounded-lg" />
+        <div className="px-8 text-center text-sm text-muted-foreground">
+          <p>&copy; {new Date().getFullYear()} Swisscom AG. All rights reserved.</p>
+        </div>
       </div>
     </div>
   )
 }
-

@@ -1,98 +1,78 @@
-import { NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase/server"
-import { generateEmbeddingForCompanyData } from "@/lib/embeddings"
+import { generateEmbedding } from "@/lib/embeddings"
+import { createClient } from "@/lib/supabase/server"
+import { type NextRequest, NextResponse } from "next/server"
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const supabase = await createServerClient()
-
-    // Sample Swisscom company data
+    // Sample company data
     const companyData = [
       {
-        category: "products",
-        title: "Swisscom Mobile Subscriptions",
+        category: "Products",
+        title: "Mobile Plans",
         content:
-          "Swisscom offers a range of mobile subscriptions including inOne mobile, which provides unlimited calls, SMS, and data within Switzerland. Plans vary from basic to premium with different international options and speeds.",
-        keywords: ["mobile", "subscription", "inOne", "data", "international"],
+          "Swisscom offers a variety of mobile plans including inOne mobile, which combines mobile, internet, and TV services. Plans start from CHF 65 per month and include unlimited calls, SMS, and data within Switzerland.",
+        keywords: ["mobile", "plans", "inOne", "pricing"],
       },
       {
-        category: "products",
-        title: "Swisscom TV",
+        category: "Products",
+        title: "Internet Services",
         content:
-          "Swisscom TV is a digital television service offering over 250 channels, replay functionality, and on-demand content. Premium packages include sports and entertainment options.",
-        keywords: ["TV", "television", "channels", "replay", "on-demand"],
+          "Swisscom provides high-speed internet services with speeds up to 10 Gbit/s. The standard package includes a Swisscom Box for TV services and a WiFi router.",
+        keywords: ["internet", "wifi", "broadband", "fiber"],
       },
       {
-        category: "services",
-        title: "Swisscom Internet",
+        category: "Support",
+        title: "Customer Support",
         content:
-          "Swisscom provides high-speed fiber optic internet with speeds up to 10 Gbit/s. All packages include a Swisscom Internet Box for optimal WiFi coverage.",
-        keywords: ["internet", "fiber", "wifi", "broadband", "speed"],
+          "Swisscom customer support is available 24/7 via phone at 0800 800 800, via chat on the Swisscom website, or in person at Swisscom Shops throughout Switzerland.",
+        keywords: ["support", "help", "contact", "assistance"],
       },
       {
-        category: "support",
-        title: "Technical Support",
+        category: "Products",
+        title: "TV Services",
         content:
-          "Swisscom offers 24/7 technical support via phone at 0800 800 800, live chat on the website, or in-person at Swisscom Shops. Common issues can be resolved using the My Swisscom app.",
-        keywords: ["support", "help", "technical", "assistance", "troubleshooting"],
+          "Swisscom blue TV offers over 300 channels, including 4K content, and features like replay, recording, and streaming apps. It can be accessed via the Swisscom Box or the blue TV app on mobile devices.",
+        keywords: ["tv", "television", "streaming", "channels"],
       },
       {
-        category: "company",
-        title: "About Swisscom",
+        category: "Support",
+        title: "Technical Issues",
         content:
-          "Swisscom is Switzerland's leading telecommunications provider, founded in 1998 following the partial privatization of PTT. The company employs over 19,000 people and is headquartered in Ittigen, near Bern.",
-        keywords: ["about", "company", "history", "headquarters", "employees"],
-      },
-      {
-        category: "billing",
-        title: "Billing Information",
-        content:
-          "Swisscom bills are issued monthly and can be paid via direct debit, e-bill, or bank transfer. Customers can view and download their bills through the My Swisscom app or customer portal.",
-        keywords: ["bill", "payment", "invoice", "monthly", "direct debit"],
-      },
-      {
-        category: "products",
-        title: "Swisscom Business Solutions",
-        content:
-          "Swisscom offers comprehensive business solutions including cloud services, IoT, managed network services, and cybersecurity. Custom enterprise solutions are available for large corporations.",
-        keywords: ["business", "enterprise", "cloud", "IoT", "security"],
-      },
-      {
-        category: "services",
-        title: "Roaming Services",
-        content:
-          "Swisscom provides roaming coverage in over 200 countries. The Travel options allow for data, calls, and SMS abroad with various packages available depending on destination and duration.",
-        keywords: ["roaming", "international", "travel", "abroad", "foreign"],
+          "For technical issues with Swisscom services, first try restarting your device. If the problem persists, check the Swisscom service status page or contact customer support at 0800 800 800.",
+        keywords: ["technical", "issues", "troubleshooting", "problems"],
       },
     ]
 
-    // Insert data and generate embeddings
-    for (const item of companyData) {
-      // Insert into company_data table
-      const { data, error } = await supabase
-        .from("company_data")
-        .insert({
-          category: item.category,
-          title: item.title,
-          content: item.content,
-          keywords: item.keywords,
-        })
-        .select("id")
-        .single()
+    const supabase = await createClient()
+
+    // Insert company data
+    for (const data of companyData) {
+      const { data: insertedData, error } = await supabase.from("company_data").insert([data]).select()
 
       if (error) {
         console.error("Error inserting company data:", error)
         continue
       }
 
-      // Generate and store embedding
-      await generateEmbeddingForCompanyData(data.id, `${item.title} ${item.content}`)
+      // Generate embedding for the data
+      const embedding = await generateEmbedding(`${data.title} ${data.content}`)
+
+      // Insert embedding
+      const { error: embeddingError } = await supabase.from("embeddings").insert([
+        {
+          company_data_id: insertedData[0].id,
+          embedding,
+        },
+      ])
+
+      if (embeddingError) {
+        console.error("Error inserting embedding:", embeddingError)
+      }
     }
 
     return NextResponse.json({ success: true, message: "Company data seeded successfully" })
   } catch (error) {
-    console.error("Error seeding company data:", error)
-    return NextResponse.json({ success: false, error: "Failed to seed company data" }, { status: 500 })
+    console.error("Error in seed-data API:", error)
+    return NextResponse.json({ error: "An error occurred while seeding data" }, { status: 500 })
   }
 }
-

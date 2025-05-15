@@ -1,33 +1,39 @@
-import { Suspense } from "react"
+import { LoginForm } from "@/components/login-form"
+import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import { createServerClient } from "@/lib/supabase/server"
-import LoginForm from "@/components/login-form"
-import { Skeleton } from "@/components/ui/skeleton"
 
 export default async function Login() {
-  const supabase = await createServerClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const supabase = await createClient()
 
-  // If user is already logged in, redirect to home page
-  if (user) {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  // If already logged in, redirect to home page
+  if (session) {
     redirect("/")
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4 md:p-24 bg-gradient-to-b from-blue-50 to-white">
-      <div className="w-full max-w-md">
-        <div className="flex flex-col items-center mb-8">
-          <img src="/swisscom-logo.png?height=60&width=180" alt="Swisscom Logo" className="h-16 mb-4" />
-          <h1 className="text-3xl font-bold text-blue-600">Swisscom AI Assistant</h1>
-          <p className="text-gray-600 mt-2">Sign in to chat with our AI customer service</p>
+    <div className="container flex h-[80vh] w-full flex-col items-center justify-center">
+      <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
+        <div className="flex flex-col space-y-2 text-center">
+          <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
+          <p className="text-sm text-muted-foreground">Sign in to your account to continue</p>
         </div>
-        <Suspense fallback={<Skeleton className="h-[400px] w-full rounded-lg" />}>
-          <LoginForm />
-        </Suspense>
+        <LoginForm />
+        <p className="px-8 text-center text-sm text-muted-foreground">
+          By continuing, you agree to Swisscom&apos;s{" "}
+          <a href="#" className="underline underline-offset-4 hover:text-primary">
+            Terms of Service
+          </a>{" "}
+          and{" "}
+          <a href="#" className="underline underline-offset-4 hover:text-primary">
+            Privacy Policy
+          </a>
+          .
+        </p>
       </div>
-    </main>
+    </div>
   )
 }
-

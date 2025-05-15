@@ -1,28 +1,29 @@
-import { createServerClient as createClient } from "@supabase/ssr"
+import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 
-export async function createServerClient() {
-  const cookieStore = cookies()
+export async function createClient() {
+  const cookieStore = await cookies()
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.SUPABASE_ANON_KEY
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Missing Supabase environment variables. Please check your .env.local file.")
-  }
-
-  return createClient(supabaseUrl, supabaseKey, {
+  return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
     cookies: {
-      get(name: string) {
-        return cookieStore.get(name)?.value
+      async get(name: string) {
+        const cookie = await cookieStore.get(name)
+        return cookie?.value
       },
-      set(name: string, value: string, options: any) {
-        cookieStore.set({ name, value, ...options })
+      async set(name: string, value: string, options: any) {
+        try {
+          cookieStore.set({ name, value, ...options })
+        } catch (error) {
+          console.error("Error setting cookie:", error)
+        }
       },
-      remove(name: string, options: any) {
-        cookieStore.set({ name, value: "", ...options })
+      async remove(name: string, options: any) {
+        try {
+          cookieStore.set({ name, value: "", ...options })
+        } catch (error) {
+          console.error("Error removing cookie:", error)
+        }
       },
     },
   })
 }
-

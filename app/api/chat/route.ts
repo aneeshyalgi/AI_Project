@@ -1,81 +1,85 @@
-import { streamText } from "ai"
-import { openai } from "@ai-sdk/openai"
+import { type NextRequest, NextResponse } from "next/server"
+import openai from "@/lib/openai"
 
-export const runtime = "edge"
-
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const { messages } = await req.json()
+    console.log("Chat API called")
 
-    // Mock Swisscom data for context
-    const mockSwisscomData = [
-      {
-        title: "Swisscom Mobile Subscriptions",
-        content:
-          "Swisscom offers a range of mobile subscriptions including inOne mobile, which provides unlimited calls, SMS, and data within Switzerland. Plans vary from basic to premium with different international options and speeds.",
-      },
-      {
-        title: "Swisscom TV",
-        content:
-          "Swisscom TV is a digital television service offering over 250 channels, replay functionality, and on-demand content. Premium packages include sports and entertainment options.",
-      },
-      {
-        title: "Swisscom Internet",
-        content:
-          "Swisscom provides high-speed fiber optic internet with speeds up to 10 Gbit/s. All packages include a Swisscom Internet Box for optimal WiFi coverage.",
-      },
-      {
-        title: "Technical Support",
-        content:
-          "Swisscom offers 24/7 technical support via phone at 0800 800 800, live chat on the website, or in-person at Swisscom Shops. Common issues can be resolved using the My Swisscom app.",
-      },
-    ]
+    const { messages, userId, conversationId, settings } = await req.json()
+    console.log("Request received with", messages.length, "messages")
+    console.log("User settings:", settings)
 
-    // Format the relevant data as context for the AI
-    const companyContext = `Here is information from Swisscom's knowledge base that might help answer the query:\n\n${mockSwisscomData
-      .map((item) => `${item.title}:\n${item.content}`)
-      .join("\n\n")}`
+    // Get the latest user message
+    const latestMessage = messages[messages.length - 1]
+    console.log("Latest message:", latestMessage.content)
 
-    // Add system message to guide the AI's behavior
+    // System message with instructions
     const systemMessage = {
       role: "system",
-      content: `You are a helpful, friendly, and professional customer service representative for Swisscom, Switzerland's leading telecom provider. 
-      Your name is SwisscomAI.
-      
-      IMPORTANT RULES:
-      1. ONLY provide information about Swisscom products, services, and policies.
-      2. If asked about non-Swisscom topics, politely redirect the conversation back to Swisscom.
-      3. If you don't know specific information, acknowledge that and offer to connect the user with a human representative.
-      4. Be concise and helpful in your responses.
-      5. Maintain a professional, friendly tone that represents the Swisscom brand.
-      6. Use the following context from Swisscom's knowledge base to inform your responses.
-      
-      ${companyContext}`,
+      content: `You are a helpful customer service assistant for Swisscom, a Swiss telecommunications provider.
+      Answer the user's questions about Swisscom products, services, and support.
+      Be friendly, concise, and helpful. If you don't know the answer, say so and offer to connect the user with a human agent.
+      Use a conversational tone and respond in the same language as the user's query (German, French, Italian, or English).`,
     }
 
-    // Create a new array with the system message at the beginning
-    const allMessages = [systemMessage, ...messages]
+    // Use settings if provided, otherwise use defaults
+    const model = settings?.model || "gpt-3.5-turbo"
+    const temperature = settings?.temperature || 0.7
 
-    // Use the AI SDK's streamText function to handle the streaming response
-    const result = streamText({
-      model: openai("gpt-4o"),
-      messages: allMessages,
+    // Generate response using OpenAI directly
+    console.log(`Calling OpenAI API with model: ${model}, temperature: ${temperature}`)
+    const stream = await openai.chat.completions.create({
+      model,
+      messages: [systemMessage, ...messages],
+      temperature,
+      max_tokens: 1000,
+      stream: true,
     })
 
-    // Return the response as a stream
-    return result.toDataStreamResponse({
-      headers: {
-        "x-conversation-id": "dev-conversation-id",
+    // Set headers for streaming response
+    const headers = new Headers()
+    headers.set("Content-Type", "text/event-stream")
+    headers.set("Cache-Control", "no-cache")
+    headers.set("Connection", "keep-alive")
+
+    if (conversationId) {
+      headers.set("X-Conversation-Id", conversationId)
+    }
+
+    // Create a readable stream
+    const encoder = new TextEncoder()
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          console.log("Starting stream processing")
+          for await (const chunk of stream) {
+            const content = chunk.choices[0]?.delta?.content || ""
+            if (content) {
+              // Format as SSE
+              const formattedChunk = `data: ${JSON.stringify({ text: content })}\n\n`
+              controller.enqueue(encoder.encode(formattedChunk))
+            }
+          }
+          console.log("Stream processing complete")
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"))
+          controller.close()
+        } catch (error) {
+          console.error("Error in stream processing:", error)
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({ text: " Sorry, there was an error processing your request." })}\n\n`,
+            ),
+          )
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"))
+          controller.close()
+        }
       },
     })
+
+    console.log("Sending response stream")
+    return new NextResponse(readable, { headers })
   } catch (error) {
     console.error("Error in chat API:", error)
-    return new Response(JSON.stringify({ error: "An error occurred" }), {
-      status: 500,
-      headers: {
-        "Content-Type": "application/json",
-      },
-    })
+    return NextResponse.json({ error: "An error occurred while processing your request" }, { status: 500 })
   }
 }
-
