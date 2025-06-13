@@ -17,7 +17,7 @@ export default function VideoCall({ roomId, isAgent }: VideoCallProps) {
 
   useEffect(() => {
     const signalingUrl =
-      process.env.NEXT_PUBLIC_SIGNALING_URL || 'https://swisscom-ai.vercel.app';
+      process.env.NEXT_PUBLIC_SIGNALING_URL || 'https://swisscom-genai-server.onrender.com';
     const sock = io(signalingUrl);
     setSocket(sock);
     console.log('Socket initialized (this side):', sock.id);
