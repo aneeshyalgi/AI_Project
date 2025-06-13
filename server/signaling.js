@@ -68,7 +68,7 @@ io.on('connection', (socket) => {
 });
 
 // 4. Listen on port 4000 (for example)
-const PORT = process.env.SIGNALING_PORT || 4000;
+const PORT = process.env.PORT || 4000;
 httpServer.listen(PORT, () => {
   console.log(`Signaling server is running on port ${PORT}`);
 });
