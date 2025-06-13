@@ -31,28 +31,8 @@ export const createSpeechRecognition = () => {
     // Configure the recognition with more resilient settings
     recognition.continuous = false
     recognition.interimResults = true
-    //    recognition.maxAlternatives = 3 // Get multiple alternatives to improve accuracy
+    // recognition.maxAlternatives is not supported on the SpeechRecognition instance
     recognition.lang = "en-US" // Default to English for better compatibility
-
-    // Add some default error handling
-    recognition.onerror = (event) => {
-      console.error(`Speech recognition error: ${event.error}`)
-
-      // Log more details for debugging
-      if (event.error === "network") {
-        console.warn("Network error in speech recognition. Check internet connection.")
-      } else if (event.error === "not-allowed") {
-        console.warn("Microphone access not allowed")
-      } else if (event.error === "aborted") {
-        console.log("Speech recognition aborted")
-      } else if (event.error === "audio-capture") {
-        console.warn("No microphone detected or microphone is busy")
-      } else if (event.error === "service-not-allowed") {
-        console.warn("Speech recognition service not allowed in this context")
-      } else {
-        console.warn(`Unknown speech recognition error: ${event.error}`)
-      }
-    }
 
     return recognition
   } catch (error) {
@@ -138,3 +118,38 @@ export const checkNetworkForSpeechRecognition = async (): Promise<boolean> => {
     return false
   }
 }
+
+// Add a function to handle network errors with exponential backoff
+export const handleNetworkError = (() => {
+  let retryCount = 0
+  let lastRetryTime = 0
+  const maxRetries = 5
+
+  return {
+    shouldRetry: () => {
+      const now = Date.now()
+
+      // If it's been more than 5 minutes since the last retry, reset the counter
+      if (now - lastRetryTime > 5 * 60 * 1000) {
+        retryCount = 0
+      }
+
+      if (retryCount >= maxRetries) {
+        return false
+      }
+
+      retryCount++
+      lastRetryTime = now
+      return true
+    },
+
+    getRetryDelay: () => {
+      // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+      return Math.min(1000 * Math.pow(2, retryCount - 1), 16000)
+    },
+
+    reset: () => {
+      retryCount = 0
+    },
+  }
+})()

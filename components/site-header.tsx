@@ -26,9 +26,11 @@ export function SiteHeader() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null)
-    })
+    } = supabase.auth.onAuthStateChange(
+      (_event: string, session: { user?: any } | null) => {
+        setUser(session?.user || null)
+      }
+    )
 
     return () => subscription.unsubscribe()
   }, [supabase])
@@ -63,6 +65,14 @@ export function SiteHeader() {
               }`}
             >
               Admin
+            </Link>
+            <Link
+              href="/admin/agent"
+              className={`px-4 py-2 text-sm font-medium transition-colors hover:text-primary ${
+                pathname === "/admin/agent" ? "text-primary" : "text-foreground/60"
+              }`}
+            >
+              Agent Dashboard
             </Link>
             {!isLoading && (
               <>

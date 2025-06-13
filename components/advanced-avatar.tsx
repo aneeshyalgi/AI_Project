@@ -10,7 +10,7 @@ import { getCurrentMouthOpenness, isLipSyncActive } from "@/lib/text-to-speech"
 function GLTFAvatar({
   mood,
   isSpeaking,
-  modelPath = "/assets/3d/avatar.glb",
+  modelPath = "/assets/3d/avatar2.glb",
 }: {
   mood: "neutral" | "happy" | "thinking"
   isSpeaking: boolean
@@ -61,7 +61,7 @@ function GLTFAvatar({
   )
 }
 
-useGLTF.preload("/assets/3d/avatar.glb")
+useGLTF.preload("/assets/3d/avatar26.glb")
 
 export function AdvancedAvatar({
   mood = "neutral",

@@ -13,7 +13,7 @@ function AvatarModel({
   mood: "neutral" | "happy" | "thinking"
   isSpeaking: boolean
 }) {
-  const { scene } = useGLTF("/assets/3d/avatar.glb") as any
+  const { scene } = useGLTF("/assets/3d/avatar26.glb") as any
   const group = useRef<THREE.Group>(null)
   const modelRef = useRef<THREE.Group>(null)
   const { camera } = useThree()

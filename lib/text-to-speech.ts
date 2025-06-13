@@ -15,6 +15,9 @@ let failedAttempts = 0
 const MAX_FAILED_ATTEMPTS = 3
 let speechDisabled = false
 
+// Flag to track if speech is currently in progress
+let isSpeaking = false
+
 // Function to speak text
 export const speakText = (text: string, onEnd?: () => void) => {
   // If speech has been disabled due to persistent failures, skip directly to onEnd
@@ -31,8 +34,28 @@ export const speakText = (text: string, onEnd?: () => void) => {
   }
 
   try {
-    // Cancel any ongoing speech
-    window.speechSynthesis.cancel()
+    // If already speaking, cancel it first
+    if (isSpeaking) {
+      window.speechSynthesis.cancel()
+      // Small delay to ensure cancellation completes
+      setTimeout(() => {
+        startSpeaking(text, onEnd)
+      }, 100)
+    } else {
+      startSpeaking(text, onEnd)
+    }
+  } catch (error) {
+    console.error("Error in speech synthesis:", error)
+    lipSyncAnimator.stop()
+    if (onEnd) onEnd()
+  }
+}
+
+// Helper function to actually start the speech
+const startSpeaking = (text: string, onEnd?: () => void) => {
+  try {
+    // Set speaking flag
+    isSpeaking = true
 
     // Start lip sync animation with the text
     lipSyncAnimator.start(text)
@@ -56,14 +79,14 @@ export const speakText = (text: string, onEnd?: () => void) => {
     utterance.rate = 0.9
 
     // Handle end event
-    if (onEnd) {
-      utterance.onend = () => {
-        // Stop lip sync animation
-        lipSyncAnimator.stop()
-        // Reset failed attempts counter on success
-        failedAttempts = 0
-        onEnd()
-      }
+    utterance.onend = () => {
+      // Stop lip sync animation
+      lipSyncAnimator.stop()
+      // Reset failed attempts counter on success
+      failedAttempts = 0
+      // Reset speaking flag
+      isSpeaking = false
+      if (onEnd) onEnd()
     }
 
     // Add improved error handling
@@ -71,14 +94,17 @@ export const speakText = (text: string, onEnd?: () => void) => {
       // Stop lip sync animation on error
       lipSyncAnimator.stop()
 
-      failedAttempts++
-      
       // Safely log error without stringifying the entire event object
       console.error("Speech synthesis error occurred")
-      
+
       // Try to log error type if available
       if (event && event.error) {
         console.error("Error type:", event.error)
+      }
+
+      // Don't count interrupted errors as failures
+      if (event && event.error !== "interrupted") {
+        failedAttempts++
       }
 
       // If we've had multiple failures in a row, temporarily disable speech
@@ -97,6 +123,9 @@ export const speakText = (text: string, onEnd?: () => void) => {
         )
       }
 
+      // Reset speaking flag
+      isSpeaking = false
+
       // Call onEnd callback to ensure UI is updated
       if (onEnd) onEnd()
     }
@@ -111,6 +140,7 @@ export const speakText = (text: string, onEnd?: () => void) => {
         // If still speaking after the expected time, assume it's stuck
         window.speechSynthesis.cancel()
         lipSyncAnimator.stop()
+        isSpeaking = false
         if (onEnd) onEnd()
       }
     }, maxSpeechTime + 1000) // Add 1 second buffer
@@ -122,11 +152,14 @@ export const speakText = (text: string, onEnd?: () => void) => {
       lipSyncAnimator.stop()
       // Reset failed attempts counter on success
       failedAttempts = 0
+      // Reset speaking flag
+      isSpeaking = false
       if (onEnd) onEnd()
     }
   } catch (error) {
-    console.error("Error in speech synthesis:", error)
+    console.error("Error starting speech synthesis:", error)
     lipSyncAnimator.stop()
+    isSpeaking = false
     if (onEnd) onEnd()
   }
 }
@@ -143,6 +176,7 @@ const speakTextInChunks = (text: string, onEnd?: () => void) => {
   const speakNextChunk = () => {
     if (currentIndex >= sentences.length) {
       lipSyncAnimator.stop()
+      isSpeaking = false
       if (onEnd) onEnd()
       return
     }
@@ -162,16 +196,16 @@ const speakTextInChunks = (text: string, onEnd?: () => void) => {
       }
 
       utterance.onerror = (event) => {
-        // Log error type if available without stringifying the entire event
-        if (event && event.error) {
-          console.error("Chunk speech error:", event.error)
-        } else {
-          console.error("Unknown error in chunk speech")
-        }
-        
+        console.error("Chunk speech error:", event && event.error ? event.error : "unknown error")
+
         // If one chunk fails, try to continue with the next
-        console.warn("Error speaking chunk, moving to next")
-        speakNextChunk()
+        // Don't count interrupted errors as failures
+        if (event && event.error !== "interrupted") {
+          console.warn("Error speaking chunk, moving to next")
+        }
+
+        // Continue with next chunk after a short delay
+        setTimeout(speakNextChunk, 200)
       }
 
       window.speechSynthesis.speak(utterance)
@@ -190,6 +224,7 @@ export const stopSpeaking = () => {
     try {
       window.speechSynthesis.cancel()
       lipSyncAnimator.stop()
+      isSpeaking = false
     } catch (error) {
       console.error("Error stopping speech:", error)
     }
@@ -205,7 +240,15 @@ export const isSpeechDisabled = () => {
 export const resetSpeechSynthesis = () => {
   failedAttempts = 0
   speechDisabled = false
+  isSpeaking = false
   lipSyncAnimator.stop()
+  if (isSpeechSynthesisSupported()) {
+    try {
+      window.speechSynthesis.cancel()
+    } catch (error) {
+      console.error("Error canceling speech during reset:", error)
+    }
+  }
   console.log("Speech synthesis manually reset")
 }
 
