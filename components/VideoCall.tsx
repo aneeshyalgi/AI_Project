@@ -52,20 +52,26 @@ export default function VideoCall({ roomId, isAgent }: VideoCallProps) {
       }
     });
 
+    // --- Remote Stream Handling ---
     const remoteStream = new MediaStream();
     if (remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = remoteStream;
     }
+    // Prevent duplicate tracks
+    const trackIds = new Set<string>();
     pc.ontrack = (event) => {
       event.streams[0].getTracks().forEach((track) => {
-        remoteStream.addTrack(track);
+        if (!trackIds.has(track.id)) {
+          remoteStream.addTrack(track);
+          trackIds.add(track.id);
+        }
       });
     };
 
     // ICE candidate handling
     const otherPeerIdRef = { current: '' };
     pc.onicecandidate = (event) => {
-      if (event.candidate && sock) {
+      if (event.candidate && sock && otherPeerIdRef.current) {
         sock.emit('webrtc-ice-candidate', {
           roomId,
           candidate: event.candidate,
@@ -74,24 +80,37 @@ export default function VideoCall({ roomId, isAgent }: VideoCallProps) {
       }
     };
 
-    // Socket.io handlers
+    // --- Enhanced Peer Discovery Logic ---
+    let hasInitiatedOffer = false;
+
     sock.on('connect', () => {
       sock.emit('join-room', roomId);
+      // Ask for current peers in the room
+      sock.emit('get-peers-in-room', { roomId });
+    });
+
+    // Listen for the list of peers in the room
+    sock.on('peers-in-room', ({ peers }: { peers: string[] }) => {
+      // Remove self from the list
+      const otherPeers = peers.filter((id) => id !== sock.id);
+      if (otherPeers.length > 0) {
+        // There is already a peer in the room, initiate offer
+        otherPeerIdRef.current = otherPeers[0];
+        if (!hasInitiatedOffer) {
+          pc.createOffer()
+            .then((offer) => pc.setLocalDescription(offer).then(() => offer))
+            .then((offer) => {
+              sock.emit('webrtc-offer', { roomId, offer, toPeerId: otherPeerIdRef.current });
+              hasInitiatedOffer = true;
+            })
+            .catch((err) => console.error('Error creating offer:', err));
+        }
+      }
     });
 
     sock.on('peer-joined', ({ peerId }: { peerId: string }) => {
       otherPeerIdRef.current = peerId;
-
-      if (!isAgent) {
-        pc.createOffer()
-          .then((offer) => pc.setLocalDescription(offer).then(() => offer))
-          .then((offer) => {
-            if (otherPeerIdRef.current) {
-              sock.emit('webrtc-offer', { roomId, offer, toPeerId: otherPeerIdRef.current });
-            }
-          })
-          .catch((err) => console.error('Error creating offer:', err));
-      }
+      // If you are the second peer, you will have already received the peer list and initiated the offer
     });
 
     sock.on('webrtc-offer', async ({ fromPeerId, offer }) => {

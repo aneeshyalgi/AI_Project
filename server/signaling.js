@@ -14,7 +14,7 @@ const io = new Server(httpServer, {
 });
 
 // 3. In‐memory mapping of rooms to socket IDs (very simple; you might improve later)
-//    A “room” here is just a unique identifier for each user/agent pair.
+//    A "room" here is just a unique identifier for each user/agent pair.
 io.on('connection', (socket) => {
   console.log(`New signaling connection: ${socket.id}`);
 
@@ -26,7 +26,7 @@ io.on('connection', (socket) => {
     socket.to(roomId).emit('peer-joined', { peerId: socket.id });
   });
 
-  // Relay “offer” to other peer(s) in the same room
+  // Relay "offer" to other peer(s) in the same room
   socket.on('webrtc-offer', ({ roomId, offer, toPeerId }) => {
     io.to(toPeerId).emit('webrtc-offer', {
       fromPeerId: socket.id,
@@ -34,7 +34,7 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Relay “answer” back
+  // Relay "answer" back
   socket.on('webrtc-answer', ({ roomId, answer, toPeerId }) => {
     io.to(toPeerId).emit('webrtc-answer', {
       fromPeerId: socket.id,
@@ -48,6 +48,13 @@ io.on('connection', (socket) => {
       fromPeerId: socket.id,
       candidate,
     });
+  });
+
+  // Add support for getting the list of peers in a room
+  socket.on('get-peers-in-room', ({ roomId }) => {
+    const room = io.sockets.adapter.rooms.get(roomId);
+    const peers = room ? Array.from(room) : [];
+    socket.emit('peers-in-room', { peers });
   });
 
   // Handle disconnects
